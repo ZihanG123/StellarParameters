@@ -15,5 +15,8 @@ In order to start the program, make sure you have the following packages install
 - tkinter
 
 ### How to run Star App
-#### 1. Import all the files to your local environment.
-#### 2. Run the program "starapp"
+1. Import all the files to your local environment.
+2. Run the program "starapp"
+
+### Check if Star App is running properly
+![Initial appearance of Star App](https://user-images.githubusercontent.com/92571234/210068705-fae157fd-cef1-44b2-9eb3-d572ac4353a0.png)
