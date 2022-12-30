@@ -1,10 +1,13 @@
-from train2 import *
 import matplotlib.pyplot as plt
-
 
 import os, torch
 import scipy as sp
-
+import numpy as np
+from torch import nn
+import torch.nn.functional as F
+from scipy.stats import norm
+from scipy.spatial.distance import cdist, euclidean
+from torch.utils.data import DataLoader
 
 class HyperPara:
     star_id = 100
@@ -27,6 +30,106 @@ numax_scale = 3500.
 dnu_scale = 150.
 teff_scale = 5777.
 luminosy_scale = 1.
+
+class MDN(nn.Module):
+    def __init__(self, in_features, out_features, num_gaussians, temperature=1):
+        super(MDN, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.num_gaussians = num_gaussians
+        self.temperature = temperature
+        self.pi = nn.Sequential(
+            nn.Linear(in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, num_gaussians),
+        )
+        self.sigma = nn.Sequential(
+            nn.Linear(in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, out_features * num_gaussians),
+        )
+
+        self.mu = nn.Sequential(
+            nn.Linear(in_features, 256),
+            nn.ReLU(),
+            nn.Linear(256, out_features * num_gaussians),
+        )
+        self.elu = nn.ELU()
+
+    def forward(self, minibatch):
+        pi = self.pi(minibatch)
+        pi = F.softmax(pi / self.temperature, dim=1)
+        sigma = self.sigma(minibatch)
+        sigma = sigma.view(-1, self.num_gaussians, self.out_features)
+
+        sigma[:, :, 0] = self.elu(sigma[:, :, 0].clone()) + 1 + 1e-6  # for Mass
+        sigma[:, :, 1] = self.elu(sigma[:, :, 1].clone()) + 1 + 1e-6  # for Age
+        sigma[:, :, 2] = self.elu(sigma[:, :, 2].clone()) + 1 + 1e-6  # for Init Hydrogen
+        sigma[:, :, 4] = self.elu(sigma[:, :, 4].clone()) + 1 + 1e-6  # for Alpha
+        sigma[:, :, 5] = self.elu(sigma[:, :, 5].clone()) + 1 + 1e-6  # for Radii
+
+        # sigma[:, :, 0] = torch.exp(sigma[:, :, 0])  # for Mass
+        # sigma[:, :, 1] = torch.exp(sigma[:, :, 1])  # for Age
+        # sigma[:, :, 2] = torch.exp(sigma[:, :, 2])  # for Init Hydrogen
+        # sigma[:, :, 4] = torch.exp(sigma[:, :, 4])  # for Alpha
+        # sigma[:, :, 5] = torch.exp(sigma[:, :, 5])  # for Radii
+        # sigma[:, :, 6] = torch.exp(sigma[:, :, 6])  # for Luminosity
+
+        mu = self.mu(minibatch)
+        mu = mu.view(-1, self.num_gaussians, self.out_features)
+
+        return pi, sigma, mu
+
+
+class StarNetwork(nn.Module):
+    def __init__(self, hidden_size, num_gaussians):
+        super(StarNetwork, self).__init__()
+
+        # self.kernel_size = kernel_size  # in format of (height, width)
+        self.hidden_size = hidden_size
+
+        self.linear1 = nn.Linear(10, self.hidden_size)
+        self.linear2 = nn.Linear(self.hidden_size, self.hidden_size)
+        # self.drop_layer = nn.Dropout(p=p)
+
+        self.mdn = MDN(in_features=self.hidden_size, out_features=7, num_gaussians=num_gaussians)
+
+    def print_instance_name(self):
+        print(self.__class__.__name__)
+
+    def forward(self, input_numax, input_teff, input_fe_h, input_delta_nu, input_numax_sigma,
+                input_teff_sigma, input_fe_h_sigma, input_dnu_sigma, input_lum, input_lum_sigma):
+        input_features = torch.cat((input_numax.unsqueeze(-1).float(),
+                                    input_numax_sigma.unsqueeze(-1).float(),
+                                    input_teff.unsqueeze(-1).float(),
+                                    input_teff_sigma.unsqueeze(-1).float(),
+                                    input_fe_h.unsqueeze(-1).float(),
+                                    input_fe_h_sigma.unsqueeze(-1).float(),
+                                    input_delta_nu.unsqueeze(-1).float(),
+                                    input_dnu_sigma.unsqueeze(-1).float(),
+                                    input_lum.unsqueeze(-1).float(),
+                                    input_lum_sigma.unsqueeze(-1).float()), 1)
+        linear1 = F.relu(self.linear1(input_features))
+        # drop_out = self.drop_layer(linear1)
+        linear2 = F.relu(self.linear2(linear1))
+
+        pi, sigma, mu = self.mdn(linear2)
+        return pi, sigma, mu
+
+def mix_pdf(x, loc, scale, weights):
+    d = np.zeros_like(x)
+    count = 0
+    for mu, sigma, pi in zip(loc, scale, weights):
+        d += pi * norm.pdf(x, loc=mu, scale=sigma)
+        count += 1
+    return d
+
+def dist_mu_npy(pi, mu):
+    if pi.shape != mu.shape:
+        pi = np.expand_dims(pi, 2)
+    return np.sum(pi * mu, 1)
+
+
 
 def infer(HyperPara):
     # Get cpu or gpu device for training.
@@ -186,8 +289,3 @@ def plot_fig(par_pi, par_mus, par_sigmas, output_grid, output_median, output_con
 
 if __name__ == '__main__':
     infer(HyperPara)
-
-
-
-
-
