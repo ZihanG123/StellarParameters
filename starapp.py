@@ -1,5 +1,5 @@
 import tkinter as tk
-import predict2
+import predict
 from tkinter import *
 from tkinter import ttk
 from tkinter.messagebox import showerror
