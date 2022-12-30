@@ -22,5 +22,8 @@ In order to start the program, make sure you have the following packages install
 Initial appearance of Star App: 
 ![Initial appearance of Star App](https://user-images.githubusercontent.com/92571234/210068705-fae157fd-cef1-44b2-9eb3-d572ac4353a0.png)
 
+Result when selecting "Main Sequence"
+![Result when selecting "Main Sequence"](https://user-images.githubusercontent.com/92571234/210069051-6e38ee27-b2ca-43ad-8c70-9c165bf13c2b.png)
+
 Result when selecting "Red Giant":
 ![Result when selecting "Red Giant"](https://user-images.githubusercontent.com/92571234/210068879-4c3600c3-f375-4302-a8f7-981cd49f3dfb.png)
